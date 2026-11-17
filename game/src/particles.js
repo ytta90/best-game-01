@@ -1,136 +1,132 @@
-// Emberkeep — sparks, smoke, shockwave rings, floating score text and
-// screen shake. One pool, capped, so a busy fight never allocates its
-// way into a stutter. The shake is trauma-based: big events add trauma,
-// the offset is trauma squared, and it decays every frame.
+// Particles, floating score text, shockwaves and the ambient ember drift
+// that keeps the arena alive even when nothing is fighting.
 
-export function createEffects() {
-  const particles = [];
-  const texts = [];
-  const rings = [];
-  let trauma = 0;
-  let time = 0;
-
-  function addParticle(p) {
-    if (particles.length > 420) particles.shift();
-    particles.push(p);
+export class Particles {
+  constructor() {
+    this.list = [];
+    this.texts = [];
+    this.waves = [];
+    this.embers = [];
   }
 
-  return {
-    update(dt) {
-      time += dt;
-      trauma = Math.max(0, trauma - dt * 1.6);
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.life -= dt;
-        if (p.life <= 0) {
-          particles.splice(i, 1);
-          continue;
-        }
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        p.vx *= 1 - p.drag * dt;
-        p.vy *= 1 - p.drag * dt;
-        p.vy += (p.gravity ?? 0) * dt;
-        p.size = Math.max(0.1, p.size - p.shrink * dt);
-      }
-      for (let i = texts.length - 1; i >= 0; i--) {
-        const t = texts[i];
-        t.life -= dt;
-        t.y -= 34 * dt;
-        if (t.life <= 0) texts.splice(i, 1);
-      }
-      for (let i = rings.length - 1; i >= 0; i--) {
-        const r = rings[i];
-        r.life -= dt;
-        r.radius += r.grow * dt;
-        if (r.life <= 0) rings.splice(i, 1);
-      }
-    },
-
-    burst(x, y, { count = 12, color = '#ffb347', speed = 160, size = 4, life = 0.6, gravity = 60, drag = 2 } = {}) {
-      for (let i = 0; i < count; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const s = speed * (0.3 + Math.random() * 0.7);
-        addParticle({
-          x, y,
-          vx: Math.cos(a) * s,
-          vy: Math.sin(a) * s,
-          size: size * (0.6 + Math.random() * 0.8),
-          life: life * (0.6 + Math.random() * 0.8),
-          color, gravity, drag,
-          shrink: size / life,
-        });
-      }
-    },
-
-    emberTrail(x, y) {
-      addParticle({
-        x: x + (Math.random() - 0.5) * 8,
-        y: y + (Math.random() - 0.5) * 8,
-        vx: (Math.random() - 0.5) * 30,
-        vy: -30 - Math.random() * 40,
-        size: 3 + Math.random() * 2,
-        life: 0.5 + Math.random() * 0.3,
-        color: Math.random() < 0.5 ? '#ffb347' : '#ff7a3c',
-        gravity: -40, drag: 1, shrink: 6,
+  // A burst of glowing dots flying out from (x, y).
+  burst(x, y, color, count = 14, speed = 260, life = 0.55, size = 4) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = speed * (0.3 + Math.random() * 0.7);
+      this.list.push({
+        x, y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: life * (0.6 + Math.random() * 0.7),
+        maxLife: life,
+        size: size * (0.6 + Math.random() * 0.8),
+        color,
+        drag: 0.88,
       });
-    },
+    }
+    if (this.list.length > 420) this.list.splice(0, this.list.length - 420);
+  }
 
-    ring(x, y, color = '#ffd27a', grow = 260) {
-      rings.push({ x, y, radius: 8, grow, life: 0.45, maxLife: 0.45, color });
-    },
+  // A ring that expands and fades (nova, boss death, wave clear).
+  shockwave(x, y, color, maxR = 160, life = 0.5) {
+    this.waves.push({ x, y, color, r: 8, maxR, life, maxLife: life });
+  }
 
-    text(x, y, str, color = '#ffffff', size = 16) {
-      if (texts.length > 40) texts.shift();
-      texts.push({ x, y, str, color, size, life: 0.9, maxLife: 0.9 });
-    },
+  // Score / message text that floats up and fades.
+  text(x, y, str, color = '#ffd166', size = 16) {
+    this.texts.push({ x, y, str, color, size, life: 0.9, maxLife: 0.9 });
+    if (this.texts.length > 40) this.texts.shift();
+  }
 
-    shake(amount) {
-      trauma = Math.min(1, trauma + amount);
-    },
+  // Slow embers drifting up across the whole arena (ambient, always on).
+  seedEmbers(rng, count, w, h) {
+    this.embers = [];
+    for (let i = 0; i < count; i++) {
+      this.embers.push({
+        x: rng.range(0, w),
+        y: rng.range(0, h),
+        r: rng.range(1, 2.6),
+        vy: rng.range(8, 26),
+        sway: rng.range(0.4, 1.4),
+        phase: rng.range(0, Math.PI * 2),
+        alpha: rng.range(0.15, 0.5),
+      });
+    }
+  }
 
-    shakeOffset() {
-      const s = trauma * trauma * 14;
-      return {
-        x: (Math.random() * 2 - 1) * s,
-        y: (Math.random() * 2 - 1) * s,
-      };
-    },
+  update(dt) {
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const p = this.list[i];
+      p.life -= dt;
+      if (p.life <= 0) { this.list.splice(i, 1); continue; }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= Math.pow(p.drag, dt * 60);
+      p.vy *= Math.pow(p.drag, dt * 60);
+    }
+    for (let i = this.texts.length - 1; i >= 0; i--) {
+      const t = this.texts[i];
+      t.life -= dt;
+      t.y -= 42 * dt;
+      if (t.life <= 0) this.texts.splice(i, 1);
+    }
+    for (let i = this.waves.length - 1; i >= 0; i--) {
+      const w = this.waves[i];
+      w.life -= dt;
+      const k = 1 - w.life / w.maxLife;
+      w.r = 8 + (w.maxR - 8) * (1 - Math.pow(1 - k, 3));
+      if (w.life <= 0) this.waves.splice(i, 1);
+    }
+  }
 
-    draw(ctx) {
-      for (const r of rings) {
-        const alpha = Math.max(0, r.life / r.maxLife);
-        ctx.globalAlpha = alpha * 0.8;
-        ctx.strokeStyle = r.color;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
-        ctx.stroke();
+  updateEmbers(dt, time, w, h) {
+    for (const e of this.embers) {
+      e.y -= e.vy * dt;
+      e.x += Math.sin(time * e.sway + e.phase) * 12 * dt;
+      if (e.y < -6) {
+        e.y = h + 6;
+        e.x = Math.random() * w;
       }
-      for (const p of particles) {
-        ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 2));
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
+    }
+  }
+
+  draw(ctx) {
+    for (const e of this.embers) {
+      ctx.globalAlpha = e.alpha;
+      ctx.fillStyle = '#ffb347';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const p of this.list) {
+      ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const w of this.waves) {
+      const a = Math.max(0, w.life / w.maxLife);
+      ctx.globalAlpha = a * 0.8;
+      ctx.strokeStyle = w.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    for (const t of this.texts) {
+      const a = Math.max(0, t.life / t.maxLife);
+      ctx.globalAlpha = a;
+      ctx.font = `bold ${t.size}px system-ui, sans-serif`;
       ctx.textAlign = 'center';
-      for (const t of texts) {
-        const alpha = Math.max(0, t.life / t.maxLife);
-        ctx.globalAlpha = alpha;
-        ctx.font = `bold ${t.size}px Georgia, serif`;
-        ctx.fillStyle = t.color;
-        ctx.fillText(t.str, t.x, t.y);
-      }
-      ctx.globalAlpha = 1;
-    },
-
-    clear() {
-      particles.length = 0;
-      texts.length = 0;
-      rings.length = 0;
-      trauma = 0;
-    },
-  };
+      ctx.fillStyle = t.color;
+      ctx.fillText(t.str, t.x, t.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+  }
 }

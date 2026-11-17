@@ -1,61 +1,44 @@
-// Emberkeep — a tiny static file server for local play-testing only.
-// `node serve.ts [--port 8080]` serves this repository's game/ folder on
-// localhost so it can be played in a desktop browser with no build step.
-// It is a development convenience, not a server for the internet: it
-// only reads files under game/, only listens on loopback, and sends the
-// content types a browser game needs.
-import { readFile } from 'node:fs/promises';
+// EMBERFALL — tiny static server for local play-testing.
+// Serves game/ at http://localhost:8080 (or --port <n>).
+//   node --experimental-strip-types serve.ts --port 18133
 import { createServer } from 'node:http';
-import { extname, join, normalize, resolve, sep } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(fileURLToPath(new URL('./game', import.meta.url)));
-const portArg = process.argv.indexOf('--port');
-const port = portArg === -1 ? 8080 : Number(process.argv[portArg + 1]) || 8080;
+const here = fileURLToPath(new URL('.', import.meta.url));
+const root = join(here, 'game');
+const port = Number(process.argv[process.argv.indexOf('--port') + 1] || 8080);
 
 const TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.svg': 'image/svg+xml',
-  '.wav': 'audio/wav',
-  '.mp3': 'audio/mpeg',
-  '.ogg': 'audio/ogg',
-  '.txt': 'text/plain; charset=utf-8',
 };
 
-createServer(async (request, response) => {
-  const url = new URL(request.url ?? '/', 'http://localhost');
-  let pathname;
+const server = createServer(async (req, res) => {
   try {
-    pathname = decodeURIComponent(url.pathname);
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    let path = normalize(join(root, decodeURIComponent(url.pathname)));
+    if (!path.startsWith(root)) {
+      res.writeHead(403);
+      res.end('forbidden');
+      return;
+    }
+    if (path === root || path.endsWith('/')) path = join(path, 'index.html');
+    const data = await readFile(path);
+    res.writeHead(200, { 'content-type': TYPES[extname(path)] ?? 'application/octet-stream' });
+    res.end(data);
   } catch {
-    response.writeHead(400).end('bad request');
-    return;
+    res.writeHead(404);
+    res.end('not found');
   }
-  if (pathname.endsWith('/')) pathname += 'index.html';
-  const file = resolve(join(root, normalize(pathname)));
-  if (file !== root && !file.startsWith(root + sep)) {
-    response.writeHead(403).end('forbidden');
-    return;
-  }
-  try {
-    const body = await readFile(file);
-    response.writeHead(200, {
-      'content-type': TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream',
-      'content-length': body.length,
-      'cache-control': 'no-store',
-    });
-    response.end(body);
-  } catch {
-    response.writeHead(404).end('not found');
-  }
-}).listen(port, '127.0.0.1', () => {
-  console.log(`Emberkeep is on http://localhost:${port}`);
+});
+
+server.listen(port, '127.0.0.1', () => {
+  console.log(`EMBERFALL serving game/ at http://127.0.0.1:${port}`);
 });

@@ -1,55 +1,63 @@
-# Emberkeep
+# EMBERFALL — Defend the Last Flame
 
-[![make.fun · best-game-01](https://make.fun/badge/best-game-01.svg)](https://make.fun/bounty/best-game-01?utm_source=github&utm_medium=readme&utm_campaign=best-game-01)
+A complete, original top-down 2D arena defender that runs offline in a
+desktop browser from its own static files. No libraries, no network.
 
-**Defend the last flame of the grove.** The blight comes at night to drink
-the lantern dry. You are the keeper: hold the light until dawn — wave 10.
-
-A complete, original 2D canvas game that plays offline in a desktop browser
-from its own static files. No libraries, no network requests, no build step.
-
-## Run it
-
-```sh
-node serve.ts
-```
-
-Then open http://localhost:8080 in a desktop browser.
+You are the last flame in a dark arena. Ten waves of ember-creatures come
+for you — chasers, darts, spitters, brutes, splitters and wisps, with elites
+mixed in — and at the end of wave 10 waits the Pyre Lord, a three-phase
+boss. Survive, level up, choose your upgrades, and burn them all down.
 
 ## How to play
 
-- **WASD / arrows** — move the keeper
-- **Mouse** — aim
-- **Hold click / Space** — fire ember bolts
-- **P** — pause · **M** — mute · **R** — restart after a run ends
+- **WASD / arrows** — move
+- **Mouse** — aim, **hold click** — fire
+- **SPACE / Shift** — dash (brief invulnerability)
+- **P** — pause, **M** — mute, **R** — restart
+- **1 / 2 / 3 or click** — pick an upgrade on level-up
 
-The blight hunts the nearer of you and the lantern. Mites, crawlers, wisps,
-spitters and brutes arrive in waves; the Ashen Warden walks in on waves 5
-and 10. Enemies that reach the lantern latch on and drain its flame. If the
-flame hits zero, or the keeper falls, the night wins.
+Kills drop ember gems: collect them to level up. Every level offers three
+of twelve upgrades — fire rate, damage, extra projectiles, piercing rounds,
+dash, regeneration, magnet, combo, frost nova, orbital blades, and more.
+Kills in quick succession build a combo multiplier for your score.
 
-Slain blight drops embers. Gather enough and the game pauses to offer three
-blessings — twelve upgrades to choose from, from Twin Flame to Ember Nova.
-Clear wave 10's boss and dawn breaks: victory, with the choice to keep going
-into the endless night.
+## Run it locally
 
-## What is inside
+```sh
+node --experimental-strip-types serve.ts
+# open http://localhost:8080
+```
 
-- `game/index.html` — the page; `game/src/main.js` — the loop and state machine
-- `game/src/entities.js` — keeper, blight, bolts, embers, combat
-- `game/src/waves.js` — the wave director and the boss
-- `game/src/upgrades.js` — the twelve level-up blessings
-- `game/src/render.js` — the night grove, the lantern, the HUD, every screen
-- `game/src/audio.js` — all sound synthesized live with WebAudio
-- `game/src/shots.js` — deterministic screenshot scenes (`?shot=title|play|levelup|victory&seed=N`)
-- `game/src/config.js`, `random.js`, `input.js`, `particles.js`, `storage.js`
+## Hand it in
 
-## Entered on make.fun
+```sh
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+```
 
-Built for [best-game-01](https://make.fun/bounty/best-game-01) — "Make the best
-game". The program at `main.ts` hands the game in: it copies `game/` and
-`screenshots/` to `/output` and writes `/output/dossier.json`.
+`main.ts` copies `game/` and `screenshots/` to the output directory and
+writes `dossier.json` with the kit's `buildDossier`.
+
+## Layout
+
+- `game/index.html` — the page and its canvas
+- `game/src/main.js` — game loop and state machine
+- `game/src/config.js` — palette, waves, enemy kinds, upgrades
+- `game/src/player.js` — movement, dash, firing, levelling
+- `game/src/enemies.js` — six enemy kinds, elites, the boss
+- `game/src/combat.js` — bullets, nova, orbitals, collisions
+- `game/src/world.js` — arena pillars, wave manager, pickups
+- `game/src/upgrades.js` — the twelve upgrades and the draft
+- `game/src/render.js` — everything the eye sees
+- `game/src/hud.js` — HUD and all screens
+- `game/src/shots.js` — deterministic screenshot scenes
+- `game/src/particles.js` — particles, shockwaves, floating text
+- `game/src/audio.js` — procedural WebAudio sound
+- `game/src/input.js` — keyboard and mouse
+- `game/src/random.js` — seeded RNG
+
+Screenshots are deterministic renders of the game's own code:
+`?shot=title|play|levelup|victory|boss&seed=7`, taken at 1280×720.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See LICENSE.

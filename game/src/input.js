@@ -1,79 +1,89 @@
-// Emberkeep — keyboard and mouse input, translated into game terms.
-// The main loop asks three questions each frame: which movement keys are
-// held, where the mouse is pointing, and which keys were just pressed
-// (edges, so a menu key fires once per tap, not once per frame).
+// Keyboard + mouse input. Tracks held keys, the mouse position in canvas
+// coordinates, and edge-triggered presses (a key that went down this frame).
 
-export function createInput(canvas) {
-  const held = new Set();
-  const pressed = new Set();
-  const mouse = { x: 640, y: 300, down: false };
-
-  function canvasPoint(event) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+export class Input {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.keys = new Set();
+    this.pressed = new Set();
+    this.mouse = { x: canvas.width / 2, y: canvas.height / 2, down: false };
+    this._onKeyDown = (e) => {
+      if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+      }
+      const k = e.key.toLowerCase();
+      if (!this.keys.has(k)) this.pressed.add(k);
+      this.keys.add(k);
+    };
+    this._onKeyUp = (e) => {
+      this.keys.delete(e.key.toLowerCase());
+    };
+    this._onMouseMove = (e) => {
+      const r = this.canvas.getBoundingClientRect();
+      const sx = this.canvas.width / r.width;
+      const sy = this.canvas.height / r.height;
+      this.mouse.x = (e.clientX - r.left) * sx;
+      this.mouse.y = (e.clientY - r.top) * sy;
+    };
+    this._onMouseDown = (e) => {
+      if (e.button === 0) this.mouse.down = true;
+      this._onMouseMove(e);
+    };
+    this._onMouseUp = (e) => {
+      if (e.button === 0) this.mouse.down = false;
+    };
+    this._onBlur = () => {
+      this.keys.clear();
+      this.mouse.down = false;
     };
   }
 
-  window.addEventListener('keydown', (event) => {
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
-      event.preventDefault();
-    }
-    if (!event.repeat) pressed.add(event.code);
-    held.add(event.code);
-  });
-  window.addEventListener('keyup', (event) => {
-    held.delete(event.code);
-  });
-  window.addEventListener('blur', () => {
-    held.clear();
-    mouse.down = false;
-  });
-  canvas.addEventListener('mousemove', (event) => {
-    const p = canvasPoint(event);
-    mouse.x = p.x;
-    mouse.y = p.y;
-  });
-  canvas.addEventListener('mousedown', (event) => {
-    const p = canvasPoint(event);
-    mouse.x = p.x;
-    mouse.y = p.y;
-    mouse.down = true;
-  });
-  window.addEventListener('mouseup', () => {
-    mouse.down = false;
-  });
-  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+  attach() {
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
+    window.addEventListener('blur', this._onBlur);
+    this.canvas.addEventListener('mousemove', this._onMouseMove);
+    this.canvas.addEventListener('mousedown', this._onMouseDown);
+    window.addEventListener('mouseup', this._onMouseUp);
+  }
 
-  return {
-    mouse,
-    // Held-down test, with the usual WASD / arrow aliases.
-    down(code) {
-      return held.has(code);
-    },
-    moveX() {
-      let x = 0;
-      if (held.has('KeyA') || held.has('ArrowLeft')) x -= 1;
-      if (held.has('KeyD') || held.has('ArrowRight')) x += 1;
-      return x;
-    },
-    moveY() {
-      let y = 0;
-      if (held.has('KeyW') || held.has('ArrowUp')) y -= 1;
-      if (held.has('KeyS') || held.has('ArrowDown')) y += 1;
-      return y;
-    },
-    firing() {
-      return mouse.down || held.has('Space');
-    },
-    // Edge test: true only on the frame the key went down.
-    wasPressed(code) {
-      return pressed.has(code);
-    },
-    // Called at the end of each frame so edges do not linger.
-    endFrame() {
-      pressed.clear();
-    },
-  };
+  detach() {
+    window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('keyup', this._onKeyUp);
+    window.removeEventListener('blur', this._onBlur);
+    this.canvas.removeEventListener('mousemove', this._onMouseMove);
+    this.canvas.removeEventListener('mousedown', this._onMouseDown);
+    window.removeEventListener('mouseup', this._onMouseUp);
+  }
+
+  // Held this frame?
+  down(...names) {
+    return names.some((n) => this.keys.has(n));
+  }
+
+  // Went down since the last endFrame()?
+  hit(...names) {
+    return names.some((n) => this.pressed.has(n));
+  }
+
+  // Call once per frame, after the game has read the input.
+  endFrame() {
+    this.pressed.clear();
+  }
+
+  // WASD / arrows as a normalised movement vector.
+  moveVector() {
+    let x = 0;
+    let y = 0;
+    if (this.down('a', 'arrowleft')) x -= 1;
+    if (this.down('d', 'arrowright')) x += 1;
+    if (this.down('w', 'arrowup')) y -= 1;
+    if (this.down('s', 'arrowdown')) y += 1;
+    if (x !== 0 && y !== 0) {
+      const inv = 1 / Math.hypot(x, y);
+      x *= inv;
+      y *= inv;
+    }
+    return { x, y };
+  }
 }
